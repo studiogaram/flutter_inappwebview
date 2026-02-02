@@ -1919,22 +1919,32 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate,
     }
     
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        initializeWindowIdJS()
-        
-        InAppWebView.credentialsProposed = []
-        evaluateJavaScript(PLATFORM_READY_JS_SOURCE, completionHandler: nil)
-        
-        // sometimes scrollView.contentSize doesn't fit all the frame.size available
-        // so, we call setNeedsLayout to redraw the layout
-        let webViewFrameSize = frame.size
-        let scrollViewSize = scrollView.contentSize
-        if (scrollViewSize.width < webViewFrameSize.width || scrollViewSize.height < webViewFrameSize.height) {
-            setNeedsLayout()
-        }
+        // iOS 17 이하에서 evaluateJavaScript 크래시 방지
+        // weak self와 메인 스레드에서 안전하게 실행
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
 
-        channelDelegate?.onLoadStop(url: url?.absoluteString)
-        
-        inAppBrowserDelegate?.didFinishNavigation(url: url)
+            self.initializeWindowIdJS()
+
+            InAppWebView.credentialsProposed = []
+
+            // webView가 유효한 상태인지 확인 후 실행
+            if self.url != nil && !self.isLoading {
+                self.evaluateJavaScript(PLATFORM_READY_JS_SOURCE, completionHandler: nil)
+            }
+
+            // sometimes scrollView.contentSize doesn't fit all the frame.size available
+            // so, we call setNeedsLayout to redraw the layout
+            let webViewFrameSize = self.frame.size
+            let scrollViewSize = self.scrollView.contentSize
+            if (scrollViewSize.width < webViewFrameSize.width || scrollViewSize.height < webViewFrameSize.height) {
+                self.setNeedsLayout()
+            }
+
+            self.channelDelegate?.onLoadStop(url: self.url?.absoluteString)
+
+            self.inAppBrowserDelegate?.didFinishNavigation(url: self.url)
+        }
     }
     
     public func webView(_ view: WKWebView,
